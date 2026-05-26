@@ -1,9 +1,29 @@
+#ifdef defined(__WIN32__) || defined(__NT__)
+#    define MEU_API_WINDOWS
+#  endif
+
+#if defined(__linux__) || defined(__linux)
+#  define MEU_API_LINUX
+#endif
+
+#if defined(__APPLE__)
+#  defined MEU_API_OSX
+#endif
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h> 
 #include <time.h>
 
 #define rando() ((double)rand()/RAND_MAX)
+
+int modEpocaDisplay = 1;
+
+int tempoInicial = 0;
+
+int tempoIntermediario = 0;
+
+int tempoFinal = 0;
 
 int TipoSaida = 0;
 
@@ -29,7 +49,7 @@ int numPadroes = 0;
 
 int numEntrada = 0;
 
-int numEscondida = 100;
+int numEscondida = 0;
 
 int numSaida = 0;
 
@@ -107,7 +127,9 @@ double alpha = 0;
 
 double wmax = 1;
 
-double erroLimite = 0.0004;
+double erroLimite = 0.0001;
+
+int primeiraExecucao = 1;
 
 double** mtdGerarArquivoMatriz(char *Arquivo, int *coluna, int *linha, int *comprimento, int *minimoValor, int *maximoValor)
 {
@@ -233,7 +255,7 @@ double** mtdGerarArquivoMatriz(char *Arquivo, int *coluna, int *linha, int *comp
 	return Matriz;
 }
 
-void mtdGerarVetorMatriz(void)
+void mtdGerarVetorMatriz()
 {
 	// int ranpad[NUMEROPADROES+1];
 	ranpad = (int *)malloc((numPadroes + 1) * sizeof(int));
@@ -278,7 +300,7 @@ void mtdGerarVetorMatriz(void)
 		W23[i] = (double *)malloc((numSaida + 1) * sizeof(double));
 	}
 
-	// double SAIDA[NUMEROPADROES+1][NUMEROSAIDAS+1];
+	// double Saida[NUMEROPADROES+1][NUMEROSAIDAS+1];
 	Saida = (double **)malloc((numPadroes + 1) * sizeof(double *));
 
 	for (i = 0; i < (numPadroes + 1); i++)
@@ -312,7 +334,7 @@ void mtdGerarVetorMatriz(void)
 	}
 }
 
-void mtdDestruirVetorMatriz(void)
+void mtdDestruirVetorMatriz()
 {
 	// int ranpad[NUMEROPADROES+1];
 
@@ -421,7 +443,7 @@ void mtdDestruirVetorMatriz(void)
 	free(DeltaW23);
 }
 
-void mtdObterEntradasTreinamento(void)
+void mtdObterEntradasTreinamento()
 {
 	int coluna = 0;
 	int linha = 0;
@@ -432,7 +454,7 @@ void mtdObterEntradasTreinamento(void)
 	numPadroes = linha;
 }
 
-void mtdObterEntradasExecucao(void)
+void mtdObterEntradasExecucao()
 {
 	int coluna = 0;
 	int linha = 0;
@@ -443,7 +465,7 @@ void mtdObterEntradasExecucao(void)
 	numPadroes = linha;
 }
 
-void mtdObterAlvosTreinamento(void)
+void mtdObterAlvosTreinamento()
 {
 	int coluna = 0;
 	int linha = 0;
@@ -452,11 +474,13 @@ void mtdObterAlvosTreinamento(void)
 	target = mtdGerarArquivoMatriz("target.dat", &coluna, &linha, &comprimento, &minimoValorAlvo, &maximoValorAlvo);
 	numSaida = coluna;
 	numPadroes = linha;
+	
+	mtdEscreverNumeroColunasAlvos();
 }
 
-void mtdObterAlvosExecucao(int linha)
+void mtdZerarAlvosExecucao(int linha)
 {
-	mtdObterAlvosTreinamento();
+	mtdObterNumeroColunasAlvos();
 
 	int coluna = numSaida;
 
@@ -473,15 +497,12 @@ void mtdObterAlvosExecucao(int linha)
 	{
 		for (j = 1; j < (coluna + 1); j++)
 		{
-			target[i][j] = 0;
+			target[i][j] = 0.0;
 		}
 	}
-
-	numSaida = coluna;
-	numPadroes = linha;
 }
 
-void mtdExportarPesos(void)
+void mtdExportarPesos()
 {
 	int  m, n;
 	FILE *cfPtr;
@@ -535,12 +556,102 @@ void mtdIniciarPesos()
 	fclose(cfPtr);
 }
 
-void mtdEscreverSaida(void)
+void mtdDefinirModEpocaDisplay()
+{
+	if (numIteracoes >= 100)
+	{
+		modEpocaDisplay = (int)(numIteracoes / 100);
+	}
+	else
+	{
+		modEpocaDisplay = 1;
+	}
+}
+
+void mtdObterErroTreinamento()
 {
 	FILE *cfPtr;
-	cfPtr = fopen("resultados.dat", "w");
+	cfPtr = fopen("errotreinamento.dat", "r");
 
-	fprintf(cfPtr, "NETWORK DATA - Epoca %d\n\nPat:\t", epoca); // Mostra as SAIDAs
+	fscanf(cfPtr, "%lf", &Erro);
+
+	fclose(cfPtr);
+}
+
+void mtdEscreverErroTreinamento()
+{
+	FILE *cfPtr;
+	cfPtr = fopen("errotreinamento.dat", "w");
+
+	fprintf(cfPtr, "%lf", Erro);
+
+	fclose(cfPtr);
+}
+
+void mtdObterNumeroNeuronios()
+{
+	FILE *cfPtr;
+	cfPtr = fopen("numeroneuronios.dat", "r");
+
+	fscanf(cfPtr, "%d", &numEscondida);
+
+	fclose(cfPtr);
+}
+
+void mtdEscreverNumeroNeuronios()
+{
+	FILE *cfPtr;
+	cfPtr = fopen("numeroneuronios.dat", "w");
+
+	fprintf(cfPtr, "%d", numEscondida);
+
+	fclose(cfPtr);
+}
+
+void mtdObterNumeroColunasAlvos()
+{
+	if (numSaida <= 0)
+	{
+		mtdObterAlvosTreinamento();
+		
+		mtdEscreverNumeroColunasAlvos();
+	}
+	else
+	{
+		FILE *cfPtr;
+		cfPtr = fopen("numerocolunasalvos.dat", "r");
+	
+		fscanf(cfPtr, "%d", &numSaida);
+	
+		fclose(cfPtr);
+	}
+}
+
+void mtdEscreverNumeroColunasAlvos()
+{
+	FILE *cfPtr;
+	cfPtr = fopen("numerocolunasalvos.dat", "w");
+
+	fprintf(cfPtr, "%d", numSaida);
+
+	fclose(cfPtr);
+}
+
+void mtdEscreverSaida(int TipoResultado)
+{
+	FILE *cfPtr;
+
+	if(TipoResultado == 0)
+	{
+		cfPtr = fopen("resultadostreinamento.dat", "w");
+	}
+	else if(TipoResultado == 1)
+	{
+		cfPtr = fopen("resultadosteste.dat", "w");
+	}
+
+	tempoIntermediario = time(NULL);
+	fprintf(cfPtr, "NETWORK DATA - Epoca %d - Neuronios %d - Iteracoes %d - Erro %lf - Tempo Execucao %.0lf [s].\n\nPat:\t", epoca, numEscondida, numIteracoes, Erro, difftime(tempoIntermediario, tempoInicial)); // Mostra as SAIDAs
 
 	for (i = 1; i < (numEntrada + 1); i++)
 	{
@@ -563,11 +674,12 @@ void mtdEscreverSaida(void)
 
 		for (k = 1; k < (numSaida + 1); k++)
 		{
-			fprintf(cfPtr, "%lf\t%lf\t", target[p][k] * maximoValorAlvo, Saida[p][k] * (maximoValorAlvo - minimoValorAlvo) + (minimoValorAlvo));
+			fprintf(cfPtr, "%lf\t%lf\t", target[p][k] * (maximoValorEntrada - minimoValorEntrada) + (minimoValorEntrada), Saida[p][k] * (maximoValorAlvo - minimoValorAlvo) + (minimoValorAlvo));
 		}
 	}
 
-	fprintf(stdout, "NETWORK DATA - Epoca %d\n\nPat:\t", epoca); // Mostra as SAIDAs
+	tempoIntermediario = time(NULL);
+	fprintf(stdout, "NETWORK DATA - Epoca %d - Neuronios %d - Iteracoes %d - Erro %lf - Tempo Execucao %.0lf [s].\n\nPat:\t", epoca, numEscondida, numIteracoes, Erro, difftime(tempoIntermediario, tempoInicial)); // Mostra as SAIDAs
 
 	for (i = 1; i < (numEntrada + 1); i++)
 	{
@@ -588,26 +700,30 @@ void mtdEscreverSaida(void)
 		}
 		for (k = 1; k < (numSaida + 1); k++)
 		{
-			fprintf(stdout, "%lf\t%lf\t", target[p][k] * maximoValorAlvo, Saida[p][k] * (maximoValorAlvo - minimoValorAlvo) + (minimoValorAlvo));
+			fprintf(stdout, "%lf\t%lf\t", target[p][k] * (maximoValorEntrada - minimoValorEntrada) + (minimoValorEntrada), Saida[p][k] * (maximoValorAlvo - minimoValorAlvo) + (minimoValorAlvo));
 		}
 	}
-
-	printf("\n");
+	
+	fprintf(stdout, "\n\n");
 
 	fclose(cfPtr);
+	fflush(stdout);
+	
+	mtdPausar();
 }
 
-int mtdTreinarRedeNeural(void)
+int mtdTreinarRedeNeural()
 {
 	int retorno = 0;
 
 	FILE *cfPtr;
 
+	mtdDefinirModEpocaDisplay();
 	mtdObterEntradasTreinamento();
 	mtdObterAlvosTreinamento();
 	mtdGerarVetorMatriz();
 
-	cfPtr = fopen("erro.dat", "w");
+	cfPtr = fopen("erro_TreinamentoRedeNeural.dat", "w");
 
 	for (j = 1; j < (numEscondida + 1); j++)
 	{
@@ -629,12 +745,12 @@ int mtdTreinarRedeNeural(void)
 		}
 	}
 
-	for (epoca = 0; epoca < numIteracoes; epoca++)
+	for (epoca = 1; numIteracoes > 0 ? epoca < (numIteracoes + 1) : 1; epoca++)
 	{
-		// Faz a iteração da atualização dos pesos
+		// Faz a iteracao da atualizacao dos pesos
 		for (p = 1; p < (numPadroes + 1); p++)
 		{
-			// Randomiza a ordem dos indivíduos
+			// Randomiza a ordem dos individuos
 			ranpad[p] = p;
 		}
 
@@ -649,12 +765,12 @@ int mtdTreinarRedeNeural(void)
 
 		for (np = 1; np < (numPadroes + 1); np++)
 		{
-			// Repete para todos os padrões de treinamento
+			// Repete para todos os padroes de treinamento
 			p = ranpad[np];
 
 			for (j = 1; j < (numEscondida + 1); j++)
 			{
-				// Computa as ativações da unidade escondida
+				// Computa as ativacoes da unidade escondida
 				SomaEscondida[p][j] = W12[0][j];
 				for (i = 1; i < (numEntrada + 1); i++)
 				{
@@ -665,7 +781,7 @@ int mtdTreinarRedeNeural(void)
 
 			for (k = 1; k < (numSaida + 1); k++)
 			{
-				// Computa as unidades de ativação da saída e erros
+				// Computa as unidades de ativacao da saida e erros
 				SomaSaida[p][k] = W23[0][k];
 				for (j = 1; j < (numEscondida + 1); j++)
 				{
@@ -715,7 +831,7 @@ int mtdTreinarRedeNeural(void)
 
 			for (j = 1; j < (numEscondida + 1); j++)
 			{
-				// Retropropagação de erros para a camada escondida
+				// Retropropagacao de erros para a camada escondida
 				somaDWS[j] = 0.0;
 				for (k = 1; k < (numSaida + 1); k++)
 				{
@@ -738,7 +854,7 @@ int mtdTreinarRedeNeural(void)
 
 			for (k = 1; k < (numSaida + 1); k++)
 			{
-				// Atualiza pesos W23 */
+				// Atualiza pesos W23
 				DeltaW23[0][k] = eta * DeltaS[k] + alpha * DeltaW23[0][k];
 				W23[0][k] += DeltaW23[0][k];
 				for (j = 1; j < (numEscondida + 1); j++)
@@ -749,9 +865,11 @@ int mtdTreinarRedeNeural(void)
 			}
 		}
 
-		if (epoca % 1000 == 0)
+		if (epoca % modEpocaDisplay == 0 || epoca == numIteracoes)
 		{
-			fprintf(cfPtr, "\nEpoca:\t%d\tErro:\t%lf\n", epoca, Erro);
+			tempoIntermediario = time(NULL);
+			fprintf(cfPtr, "NETWORK DATA - Epoca %d - Neuronios %d - Iteracoes %d - Erro %lf - Tempo Execucao %.0lf [s].\n", epoca, numEscondida, numIteracoes, Erro, difftime(tempoIntermediario, tempoInicial)); // Mostra as SAIDAs
+			fprintf(stdout, "NETWORK DATA - Epoca %d - Neuronios %d - Iteracoes %d - Erro %lf - Tempo Execucao %.0lf [s].\n", epoca, numEscondida, numIteracoes, Erro, difftime(tempoIntermediario, tempoInicial)); // Mostra as SAIDAs
 		}
 
 		if (Erro < erroLimite)
@@ -763,7 +881,8 @@ int mtdTreinarRedeNeural(void)
 	fclose(cfPtr);
 
 	mtdExportarPesos();
-	mtdEscreverSaida();
+	mtdEscreverErroTreinamento();
+	mtdEscreverSaida(0);
 	mtdDestruirVetorMatriz();
 	retorno = 1;
 
@@ -774,17 +893,22 @@ int mtdExecutarRedeNeural()
 {
 	int retorno = 0;
 
+	FILE *cfPtr;
+
+	mtdDefinirModEpocaDisplay();
 	mtdObterEntradasExecucao();
-	mtdObterAlvosExecucao(numPadroes);
+	mtdZerarAlvosExecucao(numPadroes);
 	mtdGerarVetorMatriz();
 	mtdIniciarPesos();
 
-	for (epoca = 0; epoca < numIteracoes; epoca++)
+	cfPtr = fopen("erro_ExecucaoRedeNeural.dat", "w");
+
+	for (epoca = 1; numIteracoes > 0 ? epoca < (numIteracoes + 1) : 1; epoca++)
 	{
-		// Faz a iteração da atualização dos pesos
+		// Faz a iteracao da atualizacao dos pesos
 		for (p = 1; p < (numPadroes + 1); p++)
 		{
-			// Randomiza a ordem dos indivíduos
+			// Randomiza a ordem dos individuos
 			ranpad[p] = p;
 		}
 		for (p = 1; p < (numPadroes + 1); p++)
@@ -797,11 +921,11 @@ int mtdExecutarRedeNeural()
 		Erro = 0.0;
 		for (np = 1; np < (numPadroes + 1); np++)
 		{
-			// Repete para todos os padrões de treinamento
+			// Repete para todos os padroes de treinamento
 			p = ranpad[np];
 			for (j = 1; j < (numEscondida + 1); j++)
 			{
-				// Computa as ativações da unidade escondida
+				// Computa as ativacoes da unidade escondida
 				SomaEscondida[p][j] = W12[0][j];
 				for (i = 1; i < (numEntrada + 1); i++)
 				{
@@ -811,7 +935,7 @@ int mtdExecutarRedeNeural()
 			}
 			for (k = 1; k < (numSaida + 1); k++)
 			{
-				// Computa as unidades de ativação da saída e erros
+				// Computa as unidades de ativacao da saida e erros
 				SomaSaida[p][k] = W23[0][k];
 				for (j = 1; j < (numEscondida + 1); j++)
 				{
@@ -860,7 +984,7 @@ int mtdExecutarRedeNeural()
 			}
 			for (j = 1; j < (numEscondida + 1); j++)
 			{
-				// Retropropagação de erros para a camada escondida
+				// Retropropagacao de erros para a camada escondida
 				somaDWS[j] = 0.0;
 				for (k = 1; k < (numSaida + 1); k++)
 				{
@@ -891,23 +1015,40 @@ int mtdExecutarRedeNeural()
 				}
 			}
 		}
-
-		fprintf(stdout, "\nEpoca:\t%d\tErro:\t%lf\n", epoca, Erro);
-
-		if (Erro < erroLimite)
+		
+		if (epoca % modEpocaDisplay == 0 || epoca == numIteracoes)
 		{
-			break; // Para o aprendizado quando o erro convergir para o valor descrito
+			tempoIntermediario = time(NULL);
+			fprintf(cfPtr, "NETWORK DATA - Epoca %d - Neuronios %d - Iteracoes %d - Erro %lf - Tempo Execucao %.0lf [s].\n", epoca, numEscondida, numIteracoes, Erro, difftime(tempoIntermediario, tempoInicial)); // Mostra as SAIDAs
+			fprintf(stdout, "NETWORK DATA - Epoca %d - Neuronios %d - Iteracoes %d - Erro %lf - Tempo Execucao %.0lf [s].\n", epoca, numEscondida, numIteracoes, Erro, difftime(tempoIntermediario, tempoInicial)); // Mostra as SAIDAs
 		}
 	}
 
-	mtdEscreverSaida();
+	mtdObterErroTreinamento();
+	mtdEscreverSaida(1);
 	mtdDestruirVetorMatriz();
 	retorno = 1;
 
 	return retorno;
 }
 
-void mtdSair(void)
+void mtdPausar()
+{
+    #if defined(MEU_API_WINDOWS)
+    	// código para windows
+		system("pause");
+    #elif defined(MEU_API_LINUX)
+	    // código para linux
+		int c = getchar();
+		c = getchar();
+    #elif defined(MEU_API_OSX)
+	    // código para OS X.
+		int c = getchar();
+		c = getchar();
+    #endif
+}
+
+void mtdSair()
 {
 	// system("exit");
 	exit(1);
@@ -916,8 +1057,6 @@ void mtdSair(void)
 void mtdPadrao()
 {
 	int opcao = 0;
-	int tempoInicial = 0;
-	int tempoFinal = 0;
 
 	do
 	{
@@ -957,20 +1096,21 @@ void mtdPadrao()
 			}
 			tempoFinal = time(NULL);
 			printf("Tempo decorrido para o treinamento da Rede Neural: %.0lf [s].\n", difftime(tempoFinal, tempoInicial));
+			
+			mtdEscreverNumeroNeuronios();
+
+			primeiraExecucao = 0;
 
 			break;
 		case 1:
-			if (numEscondida <= 0)
+			mtdObterNumeroNeuronios();
+			if (numEscondida <= 0 && primeiraExecucao == 1)
 			{
 				printf("Digite o numero de neuronios da Rede Neural:\n");
 				scanf("%d", &numEscondida);
+				mtdEscreverNumeroNeuronios();
 			}
 			numIteracoes = 1;
-			if (erroLimite <= 0)
-			{
-				printf("Digite o erro limite: \n");
-				scanf("%lf", &erroLimite);
-			}
 			// printf("Escolha o tipo de Saida: \n");
 			// scanf("%d", &TipoSaida);
 			// printf("Escolha o tipo de Erro: \n");
@@ -989,6 +1129,8 @@ void mtdPadrao()
 			}
 			tempoFinal = time(NULL);
 			printf("Tempo decorrido para a execucao da Rede Neural: %.0lf [s].\n", difftime(tempoFinal, tempoInicial));
+			
+			primeiraExecucao = 0;
 
 			break;
 		case 2:
@@ -1001,19 +1143,18 @@ void mtdPadrao()
 			break;
 		}
 
-		system("pause");
-	} while (opcao != 2);
+		mtdPausar();
+	} 
+	while (opcao != 2);
 }
 
-void mtdTreinamento(int Escondida, int Iteracoes, double ErroLimite)
+void mtdTreinamentoRedeNeural(int Escondida, int Iteracoes, double ErroLimite)
 {
-	int tempoInicial = 0;
-	int tempoFinal = 0;
-
 	tempoInicial = time(NULL);
 	numEscondida = Escondida;
 	numIteracoes = Iteracoes;
 	erroLimite = ErroLimite;
+
 	if (mtdTreinarRedeNeural() == 1)
 	{
 		printf("Rede treinada com sucesso.\n");
@@ -1024,18 +1165,16 @@ void mtdTreinamento(int Escondida, int Iteracoes, double ErroLimite)
 	}
 	tempoFinal = time(NULL);
 	printf("Tempo decorrido para o treinamento da Rede Neural: %.0lf [s].\n", difftime(tempoFinal, tempoInicial));
-	system("pause");
+
+	mtdPausar();
 }
 
-void mtdExecucao(int Escondida, int Iteracoes, double ErroLimite)
+void mtdExecucaoRedeNeural(int Escondida, int Iteracoes)
 {
-	int tempoInicial = 0;
-	int tempoFinal = 0;
-
 	tempoInicial = time(NULL);
 	numEscondida = Escondida;
 	numIteracoes = Iteracoes;
-	erroLimite = ErroLimite;
+
 	if (mtdExecutarRedeNeural() == 1)
 	{
 		printf("Rede executada com sucesso.\n");
@@ -1046,18 +1185,31 @@ void mtdExecucao(int Escondida, int Iteracoes, double ErroLimite)
 	}
 	tempoFinal = time(NULL);
 	printf("Tempo decorrido para a execucao da Rede Neural: %.0lf [s].\n", difftime(tempoFinal, tempoInicial));
-	system("pause");
+
+	mtdPausar();
 }
 
 int main(int argc, char *argv[])
 {
+	srand((unsigned)time(NULL));
+
 	switch (argc)
 	{
-	case 3:
-		mtdExecucao(atoi(argv[1]), 1, atof(argv[2]));
+	case 2:
+		if (atoi(argv[1]) <= 0)
+		{
+			mtdObterNumeroNeuronios();
+		}
+		else
+		{
+			numEscondida = atoi(argv[1]);
+		}
+		mtdExecucaoRedeNeural(numEscondida, 1);
+		mtdEscreverNumeroNeuronios();
 		break;
 	case 4:
-		mtdTreinamento(atoi(argv[1]), atoi(argv[2]), atof(argv[3]));
+		mtdTreinamentoRedeNeural(atoi(argv[1]), atoi(argv[2]), atof(argv[3]));
+		mtdEscreverNumeroNeuronios();
 		break;
 	default:
 		mtdPadrao();
